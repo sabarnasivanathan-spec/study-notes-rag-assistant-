@@ -35,6 +35,9 @@ cd study-notes-rag-assistant-
 pip install -r requirements.tx
 (Get a free key at [console.groq.com](https://console.groq.com))
 
+3. Add your Groq API key — create a `.env` file in the project root:
+
+
 4. Run the app:
 ```bash
 streamlit run app.py
@@ -53,4 +56,3 @@ streamlit run app.py
 Built as a learning project to explore RAG pipelines, vector databases, and LLM APIs.
 ```
 
-3. Add your Groq API key — create a `.env` file in the project root:
