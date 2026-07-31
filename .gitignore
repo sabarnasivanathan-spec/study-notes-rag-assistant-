@@ -4,3 +4,4 @@ __pycache__/
 .env
 *.pdf
 chroma_db/
+.streamlit/secrets.toml
