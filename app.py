@@ -14,6 +14,8 @@ if uploaded_file is not None:
     if "processed_filename" not in st.session_state or st.session_state["processed_filename"] != uploaded_file.name:
 
         chunks_with_pages = extract_chunks_with_pages(uploaded_file)
+        with st.spinner("Processing your PDF... this may take a moment"):
+            chunks_with_pages = extract_chunks_with_pages(uploaded_file)
 
         if len(chunks_with_pages) == 0:
             st.error("⚠️ No extractable text found in this PDF. It might be a scanned or image-based document. Please try a text-based PDF instead.")
@@ -38,9 +40,10 @@ if uploaded_file is not None:
         documents = st.session_state["documents"]
         metadatas = st.session_state["metadatas"]
         bm25 = st.session_state["bm25"]
-
-        shortlist = hybrid_search(query, collection, documents, metadatas, bm25, alpha=alpha, shortlist_size=10)
-        top_chunks = rerank(query, shortlist, top_n=3)
+       
+        with st.spinner("Searching your document and generating an answer..."):
+            shortlist = hybrid_search(query, collection, documents, metadatas, bm25, alpha=alpha, shortlist_size=10)
+            top_chunks = rerank(query, shortlist, top_n=3)
 
         answer = generate_answer(client_llm, query, top_chunks)
 
@@ -56,9 +59,10 @@ if uploaded_file is not None:
     st.write("### 📝 Generate a Quiz")
 
     if st.button("Generate Quiz from this PDF"):
-        collection = st.session_state["collection"]
-        all_data = collection.get()
-        sample_chunks = all_data["documents"][:10]
+        with st.spinner("Generating your quiz..."):
+            collection = st.session_state["collection"]
+            all_data = collection.get()
+            sample_chunks = all_data["documents"][:10]
 
         quiz = generate_quiz(client_llm, sample_chunks)
         st.write(quiz)
