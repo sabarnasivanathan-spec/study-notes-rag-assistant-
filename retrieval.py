@@ -18,7 +18,10 @@ def build_index(chunks_with_pages):
     collection = client_db.create_collection("pdf_notes_app")
 
     documents = [c["text"] for c in chunks_with_pages]
-    metadatas = [{"page": c["page"]} for c in chunks_with_pages]
+    metadatas = [
+        {"page": c["page"], "source": c["source"], "chunk_index": c["chunk_index"]}
+        for c in chunks_with_pages
+    ]
     ids = [str(i) for i in range(len(chunks_with_pages))]
 
     collection.add(documents=documents, metadatas=metadatas, ids=ids)

@@ -78,7 +78,10 @@ if uploaded_file is not None:
 
             with st.expander("See retrieved chunks (hybrid + re-ranked, for debugging)"):
                 for doc, score, meta in top_chunks:
-                    st.write(f"**Page {meta['page']}** (rerank score: {score:.2f}): {doc}")
+                    source = meta.get('source', 'Unknown')
+                    page = meta.get('page', '?')
+                    chunk_idx = meta.get('chunk_index', '?')
+                    st.write(f"**{source} — Page {page}, Chunk #{chunk_idx}** (rerank score: {score:.2f}): {doc}")
                     st.write("---")
         except Exception as e:
             st.error(f"Something went wrong while generating the answer: {e}")
