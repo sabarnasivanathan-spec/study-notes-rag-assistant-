@@ -3,13 +3,35 @@ from pdf_processor import extract_chunks_with_pages
 from retrieval import build_index, hybrid_search, rerank
 from llm import get_client, generate_answer, generate_quiz
 
+st.set_page_config(page_title="Study Notes Assistant", page_icon="📚", layout="wide")
+
 st.title("📚 Study Notes Assistant")
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 client_llm = get_client(GROQ_API_KEY)
 
-uploaded_file = st.file_uploader("Upload your PDF", type="pdf")
+# --- Sidebar ---
+with st.sidebar:
+    st.header("📄 Document")
+    uploaded_file = st.file_uploader("Upload your PDF", type="pdf")
 
+    st.header("⚙️ Search Settings")
+    alpha = st.slider("Semantic vs Keyword balance", 0.0, 1.0, 0.6, 0.1,
+                       help="Higher = more semantic (meaning-based), Lower = more keyword-based")
+
+    if "total_chunks" in st.session_state:
+        st.header("📊 Document Stats")
+        st.write(f"**File:** {st.session_state.get('processed_filename', 'N/A')}")
+        st.write(f"**Chunks created:** {st.session_state['total_chunks']}")
+        if "chat_history" in st.session_state:
+            st.write(f"**Questions asked:** {len(st.session_state['chat_history'])}")
+
+    if st.session_state.get("chat_history"):
+        if st.button("🗑️ Clear conversation history"):
+            st.session_state["chat_history"] = []
+            st.rerun()
+
+# --- Main area ---
 if uploaded_file is not None:
     if "processed_filename" not in st.session_state or st.session_state["processed_filename"] != uploaded_file.name:
 
@@ -35,9 +57,7 @@ if uploaded_file is not None:
     if "chat_history" not in st.session_state:
         st.session_state["chat_history"] = []
 
-    # --- Q&A Section ---
     query = st.text_input("Ask a question about your PDF:")
-    alpha = st.slider("Semantic vs Keyword balance (higher = more semantic)", 0.0, 1.0, 0.6, 0.1)
 
     if query:
         collection = st.session_state["collection"]
@@ -45,22 +65,24 @@ if uploaded_file is not None:
         metadatas = st.session_state["metadatas"]
         bm25 = st.session_state["bm25"]
 
-        with st.spinner("Searching your document and generating an answer..."):
-            shortlist = hybrid_search(query, collection, documents, metadatas, bm25, alpha=alpha, shortlist_size=10)
-            top_chunks = rerank(query, shortlist, top_n=3)
-            answer = generate_answer(client_llm, query, top_chunks, chat_history=st.session_state["chat_history"])
+        try:
+            with st.spinner("Searching your document and generating an answer..."):
+                shortlist = hybrid_search(query, collection, documents, metadatas, bm25, alpha=alpha, shortlist_size=10)
+                top_chunks = rerank(query, shortlist, top_n=3)
+                answer = generate_answer(client_llm, query, top_chunks, chat_history=st.session_state["chat_history"])
 
-        st.session_state["chat_history"].append({"question": query, "answer": answer})
+            st.session_state["chat_history"].append({"question": query, "answer": answer})
 
-        st.write("### Answer")
-        st.write(answer)
+            st.write("### Answer")
+            st.write(answer)
 
-        with st.expander("See retrieved chunks (hybrid + re-ranked, for debugging)"):
-            for doc, score, meta in top_chunks:
-                st.write(f"**Page {meta['page']}** (rerank score: {score:.2f}): {doc}")
-                st.write("---")
+            with st.expander("See retrieved chunks (hybrid + re-ranked, for debugging)"):
+                for doc, score, meta in top_chunks:
+                    st.write(f"**Page {meta['page']}** (rerank score: {score:.2f}): {doc}")
+                    st.write("---")
+        except Exception as e:
+            st.error(f"Something went wrong while generating the answer: {e}")
 
-    # --- Conversation History ---
     if st.session_state["chat_history"]:
         st.write("---")
         st.write("### 💬 Conversation History")
@@ -69,15 +91,19 @@ if uploaded_file is not None:
             st.write(f"**A:** {turn['answer']}")
             st.write("")
 
-    # --- Quiz Section ---
     st.write("---")
     st.write("### 📝 Generate a Quiz")
 
     if st.button("Generate Quiz from this PDF"):
-        with st.spinner("Generating your quiz..."):
-            collection = st.session_state["collection"]
-            all_data = collection.get()
-            sample_chunks = all_data["documents"][:10]
+        try:
+            with st.spinner("Generating your quiz..."):
+                collection = st.session_state["collection"]
+                all_data = collection.get()
+                sample_chunks = all_data["documents"][:10]
 
-            quiz = generate_quiz(client_llm, sample_chunks)
-        st.write(quiz)
+                quiz = generate_quiz(client_llm, sample_chunks)
+            st.write(quiz)
+        except Exception as e:
+            st.error(f"Something went wrong while generating the quiz: {e}")
+else:
+    st.info("👈 Upload a PDF from the sidebar to get started")
