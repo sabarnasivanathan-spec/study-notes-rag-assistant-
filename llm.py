@@ -5,16 +5,27 @@ def get_client(api_key):
     return Groq(api_key=api_key)
 
 
-def generate_answer(client, query, top_chunks):
-    """top_chunks: list of (doc, score, meta) tuples"""
+def generate_answer(client, query, top_chunks, chat_history=None):
+    """top_chunks: list of (doc, score, meta) tuples
+    chat_history: list of {"question": ..., "answer": ...} dicts, most recent last
+    """
     context = "\n\n".join(
         f"[Page {meta['page']}]: {doc}"
         for doc, score, meta in top_chunks
     )
 
-    prompt = f"""Answer the question based only on the context below. Mention which page(s) your answer comes from.
+    history_text = ""
+    if chat_history:
+        history_text = "\n\n".join(
+            f"Q: {turn['question']}\nA: {turn['answer']}"
+            for turn in chat_history[-3:]
+        )
+        history_text = f"Previous conversation:\n{history_text}\n\n"
 
-Context:
+    prompt = f"""Answer the question based only on the context below. Mention which page(s) your answer comes from.
+Use the previous conversation (if any) to understand follow-up questions, but only answer using facts from the context.
+
+{history_text}Context:
 {context}
 
 Question: {query}
@@ -24,7 +35,7 @@ Answer:"""
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that answers based only on the given context and cites page numbers."},
+            {"role": "system", "content": "You are a helpful assistant that answers based only on the given context and cites page numbers. You can use conversation history to understand follow-up questions."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.3

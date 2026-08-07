@@ -13,15 +13,14 @@ uploaded_file = st.file_uploader("Upload your PDF", type="pdf")
 if uploaded_file is not None:
     if "processed_filename" not in st.session_state or st.session_state["processed_filename"] != uploaded_file.name:
 
-        chunks_with_pages = extract_chunks_with_pages(uploaded_file)
         with st.spinner("Processing your PDF... this may take a moment"):
             chunks_with_pages = extract_chunks_with_pages(uploaded_file)
 
-        if len(chunks_with_pages) == 0:
-            st.error("⚠️ No extractable text found in this PDF. It might be a scanned or image-based document. Please try a text-based PDF instead.")
-            st.stop()
+            if len(chunks_with_pages) == 0:
+                st.error("⚠️ No extractable text found in this PDF. It might be a scanned or image-based document. Please try a text-based PDF instead.")
+                st.stop()
 
-        collection, documents, metadatas, bm25 = build_index(chunks_with_pages)
+            collection, documents, metadatas, bm25 = build_index(chunks_with_pages)
 
         st.session_state["collection"] = collection
         st.session_state["documents"] = documents
@@ -29,9 +28,14 @@ if uploaded_file is not None:
         st.session_state["bm25"] = bm25
         st.session_state["processed_filename"] = uploaded_file.name
         st.session_state["total_chunks"] = len(chunks_with_pages)
+        st.session_state["chat_history"] = []
 
     st.success(f"PDF processed! ({st.session_state['total_chunks']} chunks created) Ask a question below.")
 
+    if "chat_history" not in st.session_state:
+        st.session_state["chat_history"] = []
+
+    # --- Q&A Section ---
     query = st.text_input("Ask a question about your PDF:")
     alpha = st.slider("Semantic vs Keyword balance (higher = more semantic)", 0.0, 1.0, 0.6, 0.1)
 
@@ -40,12 +44,13 @@ if uploaded_file is not None:
         documents = st.session_state["documents"]
         metadatas = st.session_state["metadatas"]
         bm25 = st.session_state["bm25"]
-       
+
         with st.spinner("Searching your document and generating an answer..."):
             shortlist = hybrid_search(query, collection, documents, metadatas, bm25, alpha=alpha, shortlist_size=10)
             top_chunks = rerank(query, shortlist, top_n=3)
+            answer = generate_answer(client_llm, query, top_chunks, chat_history=st.session_state["chat_history"])
 
-        answer = generate_answer(client_llm, query, top_chunks)
+        st.session_state["chat_history"].append({"question": query, "answer": answer})
 
         st.write("### Answer")
         st.write(answer)
@@ -55,6 +60,16 @@ if uploaded_file is not None:
                 st.write(f"**Page {meta['page']}** (rerank score: {score:.2f}): {doc}")
                 st.write("---")
 
+    # --- Conversation History ---
+    if st.session_state["chat_history"]:
+        st.write("---")
+        st.write("### 💬 Conversation History")
+        for turn in reversed(st.session_state["chat_history"]):
+            st.write(f"**Q:** {turn['question']}")
+            st.write(f"**A:** {turn['answer']}")
+            st.write("")
+
+    # --- Quiz Section ---
     st.write("---")
     st.write("### 📝 Generate a Quiz")
 
@@ -64,5 +79,5 @@ if uploaded_file is not None:
             all_data = collection.get()
             sample_chunks = all_data["documents"][:10]
 
-        quiz = generate_quiz(client_llm, sample_chunks)
+            quiz = generate_quiz(client_llm, sample_chunks)
         st.write(quiz)
